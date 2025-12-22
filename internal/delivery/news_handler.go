@@ -1,11 +1,15 @@
 package http
 
 import (
+	"EWSBE/internal/config"
 	"EWSBE/internal/usecase"
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type NewsHandler struct {
@@ -44,18 +48,28 @@ func (h *NewsHandler) CreateNews(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Title       string  `json:"title" binding:"required"`
-		Content     string  `json:"content" binding:"required"`
-		BannerPhoto *string `json:"banner_photo"`
+	title := c.PostForm("title")
+	content := c.PostForm("content")
+	file, header, err := c.Request.FormFile("banner_photo")
+
+	var bannerPhoto *string
+	if err == nil && header != nil {
+		// Upload to Cloudinary
+		publicID := "news_" + uuid.New().String() + "_" + time.Now().Format("20060102150405")
+		url, uploadErr := config.UploadImage(context.Background(), file, publicID)
+		if uploadErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload image"})
+			return
+		}
+		bannerPhoto = &url
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if title == "" || content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title and content are required"})
 		return
 	}
 
-	news, err := h.newsUc.CreateNews(req.Title, req.Content, req.BannerPhoto, userID.(uint))
+	news, err := h.newsUc.CreateNews(title, content, bannerPhoto, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -78,18 +92,23 @@ func (h *NewsHandler) UpdateNews(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Title       string  `json:"title"`
-		Content     string  `json:"content"`
-		BannerPhoto *string `json:"banner_photo"`
+	title := c.PostForm("title")
+	content := c.PostForm("content")
+	file, header, err := c.Request.FormFile("banner_photo")
+
+	var bannerPhoto *string
+	if err == nil && header != nil {
+		// Upload to Cloudinary
+		publicID := "news_" + uuid.New().String() + "_" + time.Now().Format("20060102150405")
+		url, uploadErr := config.UploadImage(context.Background(), file, publicID)
+		if uploadErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload image"})
+			return
+		}
+		bannerPhoto = &url
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	news, err := h.newsUc.UpdateNews(uint(newsID), req.Title, req.Content, req.BannerPhoto, userID.(uint))
+	news, err := h.newsUc.UpdateNews(uint(newsID), title, content, bannerPhoto, userID.(uint))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

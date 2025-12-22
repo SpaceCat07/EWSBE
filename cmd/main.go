@@ -33,7 +33,8 @@ func main() {
 	if err := godotenv.Load("../.env"); err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
-
+	// init Cloudinary
+	config.InitCloudinary()
 	// auto migrate
 	if err := gormDB.AutoMigrate(&entity.SensorData{}, &entity.User{}, &entity.News{}); err != nil {
 		log.Fatalf("automigrate: %v", err)
