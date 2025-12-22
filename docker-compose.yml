@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DBDRIVER=${DBDRIVER}
+      - JWT_SECRET=${JWT_SECRET}
+      - CLOUDINARY_URL=${CLOUDINARY_URL}
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_CLIENT_ID=${MQTT_CLIENT_ID}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - PORT=${PORT}
+    depends_on:
+      - db
+      - mqtt
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=ewsbe
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+volumes:
+  postgres_data:
