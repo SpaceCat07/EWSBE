@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"EWSBE/internal/config"
@@ -30,19 +30,25 @@ func main() {
 		log.Fatalf("failed to connect db: %v", err)
 	}
 
-	if err := godotenv.Load(); err != nil{
+	if err := godotenv.Load("../.env"); err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
 
 	// auto migrate
-	if err := gormDB.AutoMigrate(&entity.SensorData{}); err != nil {
+	if err := gormDB.AutoMigrate(&entity.SensorData{}, &entity.User{}, &entity.News{}); err != nil {
 		log.Fatalf("automigrate: %v", err)
 	}
 
 	// wiring repo -> usecase -> handler (Gin)
-	repo := model.NewDataRepo(gormDB)
-	uc := usecase.NewDataUsecase(repo)
-	handler := deliver.NewHandler(uc)
+	dataRepo := model.NewDataRepo(gormDB)
+	userRepo := model.NewUserRepo(gormDB)
+	newsRepo := model.NewNewsRepo(gormDB)
+
+	dataUc := usecase.NewDataUsecase(dataRepo)
+	authUc := usecase.NewAuthUsecase(userRepo)
+	newsUc := usecase.NewNewsUsecase(newsRepo)
+
+	handler := deliver.NewHandler(dataUc, authUc, newsUc)
 
 	// mqtt init
 	broker := os.Getenv("MQTT_BROKER")
@@ -50,16 +56,16 @@ func main() {
 	topic := os.Getenv("MQTT_TOPIC")
 
 	mqttClient, err := mqtt.Connect(broker, clientID)
-    if err != nil {
-        log.Printf("mqtt connect error: %v", err)
-    } else {
-        // unsubscribe / disconnect handled on shutdown
-        if err := mqtt.SubscribeSensorTopic(mqttClient, topic, 0, uc); err != nil {
-            log.Printf("mqtt subscribe error: %v", err)
-        } else {
-            log.Printf("mqtt subscribed to %s", topic)
-        }
-    }
+	if err != nil {
+		log.Printf("mqtt connect error: %v", err)
+	} else {
+		// unsubscribe / disconnect handled on shutdown
+		if err := mqtt.SubscribeSensorTopic(mqttClient, topic, 0, dataUc); err != nil {
+			log.Printf("mqtt subscribe error: %v", err)
+		} else {
+			log.Printf("mqtt subscribed to %s", topic)
+		}
+	}
 
 	// server
 	addr := normalizeAddr(cfg.Port)
@@ -86,9 +92,9 @@ func main() {
 	<-stop
 
 	// disconnect mqtt gracefully
-    if mqttClient != nil && mqttClient.IsConnected() {
-        mqttClient.Disconnect(250)
-    }
+	if mqttClient != nil && mqttClient.IsConnected() {
+		mqttClient.Disconnect(250)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

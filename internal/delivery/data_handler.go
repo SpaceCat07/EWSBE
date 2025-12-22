@@ -8,36 +8,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	uc *usecase.DataUsecase
-	r  *gin.Engine
+type DataHandler struct {
+	dataUc *usecase.DataUsecase
+	r      *gin.Engine
 }
 
-func NewHandler(uc *usecase.DataUsecase) *Handler {
+func NewDataHandler(dataUc *usecase.DataUsecase) *DataHandler {
 	r := gin.Default()
-	h := &Handler{uc: uc, r: r}
+	h := &DataHandler{dataUc: dataUc, r: r}
 
 	h.routes()
 
 	return h
 }
 
-func (h *Handler) routes() {
+func (h *DataHandler) routes() {
 	h.r.POST("/data", h.CreateData)
 }
 
-func (h *Handler) Router() http.Handler {
+func (h *DataHandler) Router() http.Handler {
 	return h.r
 }
 
-func (h *Handler) CreateData(c *gin.Context) {
+func (h *DataHandler) CreateData(c *gin.Context) {
 	var d entity.SensorData
 	if err := c.ShouldBindJSON(&d); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.uc.Create(&d); err != nil {
+	if err := h.dataUc.Create(&d); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

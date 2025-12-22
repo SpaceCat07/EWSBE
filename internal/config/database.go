@@ -10,12 +10,12 @@ import (
 
 type Config struct {
 	DBDriver string
-	DSN		 string
-	Port	 string
+	DSN      string
+	Port     string
 }
 
 func LoadConfig() Config {
-	if err := godotenv.Load(); err != nil{
+	if err := godotenv.Load("../.env"); err != nil {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
 	host := os.Getenv("DB_HOST")
@@ -31,8 +31,8 @@ func LoadConfig() Config {
 
 	c := Config{
 		DBDriver: os.Getenv("DBDRIVER"),
-		DSN: fmt.Sprintf(dsn),
-		Port: port,
+		DSN:      fmt.Sprintf(dsn),
+		Port:     port,
 	}
 
 	return c
