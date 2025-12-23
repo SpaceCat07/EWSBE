@@ -3,6 +3,7 @@ package mqtt
 import (
 	"EWSBE/internal/entity"
 	"EWSBE/internal/usecase"
+	ws "EWSBE/internal/websocket"
 	"encoding/json"
 	"errors"
 	"log"
@@ -25,23 +26,39 @@ func Connect(broker, clientID string) (paho.Client, error) {
 	return client, nil
 }
 
-func SubscribeSensorTopic(client paho.Client, topic string, qos byte, uc *usecase.DataUsecase) error {
-    if client == nil || !client.IsConnected() {
-        return errors.New("mqtt client not connected")
-    }
+func SubscribeSensorTopic(client paho.Client, topic string, qos byte, uc *usecase.DataUsecase, hub *ws.Hub) error {
+	if client == nil || !client.IsConnected() {
+		return errors.New("mqtt client not connected")
+	}
 
-    token := client.Subscribe(topic, qos, func(_ paho.Client, msg paho.Message) {
-        var d entity.SensorData
-        if err := json.Unmarshal(msg.Payload(), &d); err != nil {
-            log.Printf("mqtt: unmarshal payload error: %v", err)
-            return
-        }
-        if err := uc.Create(&d); err != nil {
-            log.Printf("mqtt: failed to save sensor data: %v", err)
-            return
-        }
-        log.Printf("mqtt: saved sensor data from topic %s", msg.Topic())
-    })
-    token.Wait()
-    return token.Error()
+	token := client.Subscribe(topic, qos, func(_ paho.Client, msg paho.Message) {
+		// parse MQTT payload
+		var mqttPayload entity.MQTTSensorPayload
+		if err := json.Unmarshal(msg.Payload(), &mqttPayload); err != nil {
+			log.Printf("mqtt: unmarshal payload error: %v", err)
+			return
+		}
+
+		// convert to SensorData
+		sensorData := mqttPayload.ToSensorData()
+
+		// save to database
+		if err := uc.Create(sensorData); err != nil {
+			log.Printf("mqtt: failed to save sensor data: %v", err)
+			return
+		}
+		log.Printf("mqtt: saved sensor data from topic %s (temp: %.1f°C, hum: %.1f%%)", 
+			msg.Topic(), sensorData.Temperature, sensorData.Humidity)
+
+		// broadcast to WebSocket clients in real-time
+		if hub != nil {
+			if err := hub.BroadcastSensorData(sensorData); err != nil {
+				log.Printf("mqtt: failed to broadcast sensor data: %v", err)
+			} else {
+				log.Printf("mqtt: broadcasted to %d WebSocket clients", hub.ClientCount())
+			}
+		}
+	})
+	token.Wait()
+	return token.Error()
 }

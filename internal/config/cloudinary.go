@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 
@@ -14,7 +15,8 @@ var Cld *cloudinary.Cloudinary
 func InitCloudinary() {
 	cloudinaryURL := os.Getenv("CLOUDINARY_URL")
 	if cloudinaryURL == "" {
-		log.Fatal("CLOUDINARY_URL is required")
+		log.Println("Warning: CLOUDINARY_URL not set, image upload will not be available")
+		return
 	}
 
 	cld, err := cloudinary.NewFromURL(cloudinaryURL)
@@ -22,9 +24,14 @@ func InitCloudinary() {
 		log.Fatalf("Failed to initialize Cloudinary: %v", err)
 	}
 	Cld = cld
+	log.Println("Cloudinary initialized successfully")
 }
 
 func UploadImage(ctx context.Context, file interface{}, publicID string) (string, error) {
+	if Cld == nil {
+		return "", errors.New("cloudinary not initialized")
+	}
+	
 	resp, err := Cld.Upload.Upload(ctx, file, uploader.UploadParams{
 		PublicID: publicID,
 		Folder:   "ewsbe/news",

@@ -2,8 +2,10 @@ package http
 
 import (
 	"EWSBE/internal/usecase"
+	ws "EWSBE/internal/websocket"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,10 +16,18 @@ type Handler struct {
 	r           *gin.Engine
 }
 
-func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc *usecase.NewsUsecase) *Handler {
+func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc *usecase.NewsUsecase, hub *ws.Hub) *Handler {
 	r := gin.Default()
 
-	dataHandler := NewDataHandler(dataUc)
+	// CORS configuration
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"} // Frontend URLs
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
+	config.AllowCredentials = true
+	r.Use(cors.New(config))
+
+	dataHandler := NewDataHandler(dataUc, hub)
 	authHandler := NewAuthHandler(authUc)
 	newsHandler := NewNewsHandler(newsUc)
 
@@ -34,17 +44,33 @@ func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc
 }
 
 func (h *Handler) routes() {
-	// Data routes
-	h.r.POST("/data", h.dataHandler.CreateData)
+	// WebSocket
+	h.r.GET("/ws", h.dataHandler.HandleWebSocket)
 
-	// Auth routes
-	h.r.POST("/register", h.authHandler.Register)
-	h.r.POST("/login", h.authHandler.Login)
+	// API Group
+	api := h.r.Group("/api")
 
-	// News routes
-	newsGroup := h.r.Group("/news")
-	newsGroup.GET("", h.newsHandler.GetAllNews)
-	newsGroup.GET("/:slug", h.newsHandler.GetNewsBySlug)
+	// Data Routes
+	api.POST("/data", h.dataHandler.CreateData)
+	api.GET("/data", h.dataHandler.GetAllData)
+	api.GET("/data/latest", h.dataHandler.GetLatestData)
+	api.GET("/data/history", h.dataHandler.GetDataHistory)
+	api.GET("/data/insights", h.dataHandler.GetDataInsights)
+	api.GET("/health", h.dataHandler.HealthCheck)
+
+	// Auth Routes
+	authGroup := api.Group("/auth")
+	{
+		authGroup.POST("/register", h.authHandler.Register)
+		authGroup.POST("/login", h.authHandler.Login)
+	}
+
+	// News Routes
+	newsGroup := api.Group("/news")
+	{
+		newsGroup.GET("", h.newsHandler.GetAllNews)
+		newsGroup.GET("/:slug", h.newsHandler.GetNewsBySlug)
+	}
 
 	// Protected routes
 	authorized := h.r.Group("/news")

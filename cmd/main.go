@@ -8,6 +8,7 @@ import (
 	"EWSBE/internal/model"
 	"EWSBE/internal/mqtt"
 	"EWSBE/internal/usecase"
+	ws "EWSBE/internal/websocket"
 	"context"
 	"log"
 	"net"
@@ -22,7 +23,15 @@ import (
 )
 
 func main() {
+	// load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Error loading .env file: %s (using defaults)", err)
+	}
+
 	cfg := config.LoadConfig()
+
+	// initialize Cloudinary
+	config.InitCloudinary()
 
 	// open DB
 	gormDB, err := db.InitDB(cfg)
@@ -30,45 +39,62 @@ func main() {
 		log.Fatalf("failed to connect db: %v", err)
 	}
 
-	if err := godotenv.Load("../.env"); err != nil {
-		log.Fatalf("Error loading .env file: %s", err)
-	}
-	// init Cloudinary
-	config.InitCloudinary()
 	// auto migrate
 	if err := gormDB.AutoMigrate(&entity.SensorData{}, &entity.User{}, &entity.News{}); err != nil {
 		log.Fatalf("automigrate: %v", err)
 	}
+	log.Println("Database migration completed")
 
-	// wiring repo -> usecase -> handler (Gin)
+	// Initialize WebSocket hub
+	hub := ws.NewHub()
+	go hub.Run()
+	log.Println("WebSocket hub started")
+
+	// wiring repo -> usecase -> handler (GIN)
 	dataRepo := model.NewDataRepo(gormDB)
-	userRepo := model.NewUserRepo(gormDB)
-	newsRepo := model.NewNewsRepo(gormDB)
-
 	dataUc := usecase.NewDataUsecase(dataRepo)
+
+	// auth components
+	userRepo := model.NewUserRepo(gormDB)
 	authUc := usecase.NewAuthUsecase(userRepo)
+
+	// news components
+	newsRepo := model.NewNewsRepo(gormDB)
 	newsUc := usecase.NewNewsUsecase(newsRepo)
 
-	handler := deliver.NewHandler(dataUc, authUc, newsUc)
+	// unified handler
+	handler := deliver.NewHandler(dataUc, authUc, newsUc, hub)
 
 	// mqtt init
 	broker := os.Getenv("MQTT_BROKER")
 	clientID := os.Getenv("MQTT_CLIENT_ID")
 	topic := os.Getenv("MQTT_TOPIC")
 
-	mqttClient, err := mqtt.Connect(broker, clientID)
-	if err != nil {
-		log.Printf("mqtt connect error: %v", err)
+	if broker == "" {
+		log.Println("Warning: MQTT_BROKER not set, skipping MQTT connection")
 	} else {
-		// unsubscribe / disconnect handled on shutdown
-		if err := mqtt.SubscribeSensorTopic(mqttClient, topic, 0, dataUc); err != nil {
-			log.Printf("mqtt subscribe error: %v", err)
+		mqttClient, err := mqtt.Connect(broker, clientID)
+		if err != nil {
+			log.Printf("mqtt connect error: %v (continuing without MQTT)", err)
 		} else {
-			log.Printf("mqtt subscribed to %s", topic)
+			// subscribe to sensor topic with WebSocket hub for broadcasting
+			if err := mqtt.SubscribeSensorTopic(mqttClient, topic, 0, dataUc, hub); err != nil {
+				log.Printf("mqtt subscribe error: %v", err)
+			} else {
+				log.Printf("mqtt subscribed to topic: %s", topic)
+			}
+
+			// graceful MQTT disconnect on shutdown
+			defer func() {
+				if mqttClient != nil && mqttClient.IsConnected() {
+					mqttClient.Disconnect(250)
+					log.Println("MQTT client disconnected")
+				}
+			}()
 		}
 	}
 
-	// server
+	// http server
 	addr := normalizeAddr(cfg.Port)
 	srv := &http.Server{
 		Addr:    addr,
@@ -82,6 +108,8 @@ func main() {
 
 	go func() {
 		log.Printf("listening on %s", addr)
+		log.Printf("webSocket endpoint: ws://localhost%s/ws", addr)
+		log.Printf("REST API endpoint: http://localhost%s/api", addr)
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
@@ -92,15 +120,15 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	// disconnect mqtt gracefully
-	if mqttClient != nil && mqttClient.IsConnected() {
-		mqttClient.Disconnect(250)
-	}
+	log.Println("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown error: %v", err)
+	} else {
+		log.Println("Server gracefully stopped")
 	}
 }
 
