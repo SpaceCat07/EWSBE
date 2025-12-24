@@ -73,7 +73,7 @@ func (h *Handler) routes() {
 	}
 
 	// Protected routes
-	authorized := h.r.Group("/news")
+	authorized := api.Group("/news")
 	authorized.Use(AuthMiddleware())
 	{
 		authorized.POST("", h.newsHandler.CreateNews)
