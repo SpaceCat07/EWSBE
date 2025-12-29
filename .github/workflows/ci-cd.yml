@@ -97,7 +97,7 @@ jobs:
 
             echo "🏗️ Restarting containers..."
             # Recreate container dengan image baru
-            docker compose up --force-recreate backend
+            docker compose up --force-recreate backend -d
 
             echo "🧹 Cleaning up unused images..."
             docker image prune -a -f
