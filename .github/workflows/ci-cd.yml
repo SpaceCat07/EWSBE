@@ -86,28 +86,18 @@ jobs:
           command_timeout: 30m
           script: |
             set -e
-            if [ ! -d /var/www/ewsbe ]; then
-              echo "📥 Cloning repository..."
-              git clone git@github.com:${{ github.repository }}.git /var/www/ewsbe
-            fi
-            cd /var/www/ewsbe || exit 1
+            cd /var/www/el/pokrik || exit 1
 
-            echo "📥 Fetching latest code..."
-            # Mencegah conflict dengan cara reset hard ke origin/main
-            git fetch --all
-            git reset --hard origin/main
+            echo "🔐 Logging in to GitHub Container Registry..."
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             echo "⬇️ Pulling latest images..."
             # Pull image terbaru dari GHCR
-            docker-compose pull app
+            docker compose pull backend
 
             echo "🏗️ Restarting containers..."
-            # Workaround for docker-compose v1.29.2 KeyError: 'ContainerConfig'
-            # We must stop containers completely before recreating them
-            docker-compose down --remove-orphans
-            
             # Recreate container dengan image baru
-            docker-compose up -d
+            docker compose up --force-recreate app
 
             echo "🧹 Cleaning up unused images..."
             docker image prune -a -f
@@ -116,7 +106,7 @@ jobs:
             sleep 15
 
             echo "📊 Container status:"
-            docker-compose ps
+            docker compose ps
             
             echo "✅ Deployment Completed!"
 
