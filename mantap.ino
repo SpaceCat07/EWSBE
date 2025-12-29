@@ -69,8 +69,8 @@ void IRAM_ATTR rpm_anemometer() {
 const char* WIFI_SSID = "YOUR_SSID";
 const char* WIFI_PASS = "YOUR_PASS";
 
-const char* MQTT_BROKER = "broker.hivemq.com"; // can be IP or hostname
-const uint16_t MQTT_PORT = 1883;
+const char* MQTT_BROKER = " mqtt-ews.stasiuncuacadlingo.com"; // can be IP or hostname
+const uint16_t MQTT_PORT = 20080;
 const char* MQTT_USER = "";    // optional
 const char* MQTT_PASS = "";    // optional
 const char* MQTT_TOPIC = "sensors/ewsbe"; // topic to publish

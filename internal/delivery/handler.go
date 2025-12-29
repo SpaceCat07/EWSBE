@@ -21,7 +21,7 @@ func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc
 
 	// CORS configuration
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"} // Frontend URLs
+	config.AllowOrigins = []string{"stasiuncuacadlingo.com"} // Frontend URLs
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
 	config.AllowCredentials = true
