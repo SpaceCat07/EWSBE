@@ -86,6 +86,10 @@ jobs:
           command_timeout: 30m
           script: |
             set -e
+            if [ ! -d /var/www/ewsbe ]; then
+              echo "📥 Cloning repository..."
+              git clone git@github.com:${{ github.repository }}.git /var/www/ewsbe
+            fi
             cd /var/www/ewsbe || exit 1
 
             echo "📥 Fetching latest code..."
