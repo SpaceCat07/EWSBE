@@ -20,12 +20,14 @@ func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc
 	r := gin.Default()
 
 	// CORS configuration
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://stasiuncuacadlingo.com/"} // Frontend URLs
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"}
-	config.AllowCredentials = true
-	r.Use(cors.New(config))
+	r.Use(cors.New(cors.Config{
+		AllowOriginFunc:  func(origin string) bool { return true },
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	dataHandler := NewDataHandler(dataUc, hub)
 	authHandler := NewAuthHandler(authUc)
