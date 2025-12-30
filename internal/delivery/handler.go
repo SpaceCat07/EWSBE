@@ -25,7 +25,7 @@ func NewHandler(dataUc *usecase.DataUsecase, authUc *usecase.AuthUsecase, newsUc
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true
+		AllowCredentials: true,
 	}))
 
 	dataHandler := NewDataHandler(dataUc, hub)
